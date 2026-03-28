@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Amazon Fiyat Takip</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f1117;--bg2:#1a1d27;--bg3:#222536;--bg4:#2a2d3e;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --text:#e8eaf0;--muted:#7c8099;--hint:#4a4e63;
+  --green:#22c55e;--green-bg:rgba(34,197,94,0.12);
+  --red:#ef4444;--red-bg:rgba(239,68,68,0.12);
+  --blue:#3b82f6;--blue-bg:rgba(59,130,246,0.1);
+  --gold:#f59e0b;--gold-bg:rgba(245,158,11,0.12);
+  --purple:#a855f7;--purple-bg:rgba(168,85,247,0.1);
+  --r:10px;--rs:6px;
+}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;min-height:100vh}
+
+/* TOPBAR */
+.topbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;position:sticky;top:0;z-index:20}
+.logo{font-size:15px;font-weight:700;letter-spacing:-.3px}
+.logo span{color:var(--blue)}
+.badges{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.badge{font-size:11px;padding:3px 8px;border-radius:20px;font-weight:500;white-space:nowrap}
+.badge.live{background:rgba(34,197,94,0.15);color:var(--green)}
+.badge.demo{background:rgba(251,191,36,0.15);color:#fbbf24}
+.badge.sheets{background:rgba(59,130,246,0.15);color:var(--blue)}
+.topbar-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.countdown{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* BUTTONS */
+.btn{height:32px;padding:0 14px;border-radius:var(--rs);border:1px solid var(--border2);background:transparent;color:var(--text);font-size:13px;cursor:pointer;white-space:nowrap;transition:background .15s}
+.btn:hover{background:var(--bg3)}
+.btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn.primary:hover{opacity:.85}
+.btn.gold{background:var(--gold-bg);border-color:rgba(245,158,11,0.3);color:var(--gold)}
+.btn.gold:hover{background:rgba(245,158,11,0.2)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* TICKER */
+.ticker{background:var(--bg2);border-bottom:1px solid var(--border);padding:7px 20px;display:flex;gap:20px;overflow-x:auto;font-size:12px;scrollbar-width:none}
+.ticker::-webkit-scrollbar{display:none}
+.ti{white-space:nowrap;display:flex;align-items:center;gap:5px}
+.ti .mine-dot{width:6px;height:6px;border-radius:50%;background:var(--gold);display:inline-block}
+.ti .t-asin{color:var(--muted);font-family:monospace}
+.ti .t-price{font-weight:600}
+.up{color:var(--green)}.down{color:var(--red)}.flat{color:var(--muted)}
+
+/* TABS */
+.tabs{display:flex;gap:2px;padding:16px 20px 0;border-bottom:1px solid var(--border)}
+.tab{padding:8px 16px;font-size:13px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:color .15s}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--text);border-bottom-color:var(--blue)}
+
+/* MAIN */
+main{padding:18px 20px;max-width:1440px;margin:0 auto}
+
+/* STATS */
+.stats-row{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:18px}
+.stat{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px}
+.stat .s-label{font-size:11px;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px}
+.stat .s-val{font-size:24px;font-weight:700}
+.stat .s-sub{font-size:11px;color:var(--hint);margin-top:2px}
+
+/* ADD SECTION */
+.add-section{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:14px}
+.add-tabs{display:flex;gap:6px;margin-bottom:10px}
+.add-tab{padding:5px 12px;border-radius:20px;font-size:12px;cursor:pointer;border:1px solid var(--border2);background:transparent;color:var(--muted);transition:all .15s}
+.add-tab.active.competitor{background:var(--blue-bg);border-color:rgba(59,130,246,0.4);color:var(--blue)}
+.add-tab.active.mine{background:var(--gold-bg);border-color:rgba(245,158,11,0.4);color:var(--gold)}
+.add-row{display:flex;gap:8px;flex-wrap:wrap}
+.add-row input,.add-row select{height:34px;background:var(--bg);border:1px solid var(--border2);border-radius:var(--rs);color:var(--text);padding:0 10px;font-size:13px;outline:none;transition:border-color .15s}
+.add-row input:focus,.add-row select:focus{border-color:var(--blue)}
+.add-row input::placeholder{color:var(--hint)}
+#asinIn{width:130px;text-transform:uppercase;font-family:monospace}
+#nameIn{flex:1;min-width:130px}
+#urlIn{flex:2;min-width:180px}
+
+/* FILTER */
+.filter-row{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.filter-row input,.filter-row select{height:30px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--rs);color:var(--text);padding:0 9px;font-size:12px;outline:none}
+.filter-row input:focus{border-color:var(--blue)}
+#fSearch{width:190px}
+#fSearch::placeholder{color:var(--hint)}
+.row-count{font-size:12px;color:var(--muted);margin-left:auto}
+
+/* TABLE */
+.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--r)}
+table{width:100%;border-collapse:collapse}
+thead th{background:var(--bg2);padding:9px 12px;text-align:left;font-size:11px;font-weight:500;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap;text-transform:uppercase;letter-spacing:.4px}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:var(--bg2)}
+tbody tr.mine-row{border-left:2px solid var(--gold)}
+tbody td{padding:9px 12px;white-space:nowrap}
+.asin-link{font-family:monospace;font-size:12px;color:var(--blue);text-decoration:none}
+.asin-link:hover{text-decoration:underline}
+.price-now{font-size:15px;font-weight:700}
+.price-prev{font-size:12px;color:var(--muted)}
+.chg{display:inline-flex;align-items:center;gap:3px;padding:3px 7px;border-radius:4px;font-size:12px;font-weight:500}
+.chg.up{background:var(--green-bg);color:var(--green)}
+.chg.down{background:var(--red-bg);color:var(--red)}
+.chg.flat{background:var(--bg3);color:var(--muted)}
+.mine-label{font-size:10px;padding:2px 6px;border-radius:20px;background:var(--gold-bg);color:var(--gold);font-weight:600;margin-left:4px}
+
+/* TREND */
+.trend{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600}
+.trend-bar{width:36px;height:6px;border-radius:3px;background:var(--bg3);overflow:hidden}
+.trend-fill{height:100%;border-radius:3px;transition:width .3s}
+
+/* SPARK */
+.sparkwrap{cursor:pointer}
+.del-btn{height:26px;padding:0 8px;border-radius:4px;border:1px solid transparent;background:transparent;color:var(--hint);font-size:16px;cursor:pointer;line-height:1}
+.del-btn:hover{border-color:var(--red);color:var(--red);background:var(--red-bg)}
+
+/* EMPTY */
+.empty-state{text-align:center;padding:48px 20px;color:var(--muted)}
+.empty-state p{margin-top:8px;font-size:13px}
+
+/* MODAL */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:100;align-items:center;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;padding:20px;width:min(640px,95vw);max-height:88vh;overflow-y:auto}
+.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.modal-head h2{font-size:15px;font-weight:600}
+.modal-close{background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer}
+.modal-close:hover{color:var(--text)}
+
+/* COMPARE SECTION */
+.compare-section{margin-top:18px}
+.compare-section h3{font-size:13px;font-weight:600;margin-bottom:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.compare-box{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:16px}
+
+/* SHEETS SECTION */
+.sheets-box{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-top:18px}
+.sheets-box h3{font-size:13px;font-weight:600;margin-bottom:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.sheets-box p{font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:8px}
+.sheets-box code{font-family:monospace;font-size:11px;background:var(--bg3);padding:2px 6px;border-radius:4px;color:var(--text)}
+
+/* TOAST */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);padding:10px 20px;font-size:13px;z-index:999;pointer-events:none;opacity:0;transition:opacity .2s;white-space:nowrap}
+.toast.show{opacity:1}
+
+/* BLINK */
+.blink-up{animation:blinkUp 1.5s}
+.blink-down{animation:blinkDown 1.5s}
+@keyframes blinkUp{0%,100%{background:transparent}40%{background:rgba(34,197,94,0.15)}}
+@keyframes blinkDown{0%,100%{background:transparent}40%{background:rgba(239,68,68,0.15)}}
+
+@media(max-width:640px){
+  .stats-row{grid-template-columns:1fr 1fr}
+  main{padding:12px}
+  .topbar{padding:10px 12px}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <div class="logo">Amazon <span>Fiyat</span> Takip</div>
+    <div class="badges">
+      <span id="apiBadge" class="badge demo">● Demo</span>
+      <span id="sheetsBadge" style="display:none" class="badge sheets">● Sheets Aktif</span>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span class="countdown" id="cdLabel"></span>
+    <button class="btn" onclick="openCompare()">Karşılaştır</button>
+    <button class="btn" onclick="exportCSV()">↓ CSV</button>
+    <button class="btn primary" id="checkBtn" onclick="checkNow()">▶ Kontrol Et</button>
+  </div>
+</div>
+
+<div class="ticker" id="ticker"></div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('all',this)">Tümü</div>
+  <div class="tab" onclick="switchTab('competitors',this)">Rakipler</div>
+  <div class="tab" onclick="switchTab('mine',this)">Benim Ürünlerim</div>
+</div>
+
+<main>
+  <div class="stats-row">
+    <div class="stat"><div class="s-label">Toplam</div><div class="s-val" id="stTotal">—</div><div class="s-sub">ASIN</div></div>
+    <div class="stat"><div class="s-label">Arttı</div><div class="s-val up" id="stUp">—</div><div class="s-sub">son kontrol</div></div>
+    <div class="stat"><div class="s-label">Düştü</div><div class="s-val down" id="stDown">—</div><div class="s-sub">son kontrol</div></div>
+    <div class="stat"><div class="s-label">Değişmedi</div><div class="s-val" id="stSame">—</div><div class="s-sub">son kontrol</div></div>
+    <div class="stat"><div class="s-label">Benim</div><div class="s-val" id="stMine" style="color:var(--gold)">—</div><div class="s-sub">ürün</div></div>
+  </div>
+
+  <div class="add-section">
+    <div class="add-tabs">
+      <button class="add-tab active competitor" id="tabCompetitor" onclick="setAddMode('competitor')">+ Rakip Ekle</button>
+      <button class="add-tab mine" id="tabMine" onclick="setAddMode('mine')">+ Kendi Ürünüm</button>
+    </div>
+    <div class="add-row">
+      <input id="asinIn" placeholder="B08N5WRWNW" maxlength="10"/>
+      <input id="nameIn" placeholder="Ürün adı (isteğe bağlı)"/>
+      <input id="urlIn" placeholder="veya Amazon URL yapıştır"/>
+      <select id="mktIn">
+        <option value="amazon.com">🇺🇸 US</option>
+        <option value="amazon.co.uk">🇬🇧 UK</option>
+        <option value="amazon.fr">🇫🇷 FR</option>
+        <option value="amazon.de">🇩🇪 DE</option>
+      </select>
+      <button class="btn primary" id="addBtn" onclick="addASIN()">+ Ekle</button>
+    </div>
+  </div>
+
+  <div class="filter-row">
+    <input id="fSearch" placeholder="ASIN veya isim ara..." oninput="render()"/>
+    <select id="fDir" onchange="render()">
+      <option value="all">Tümü</option>
+      <option value="up">▲ Arttı</option>
+      <option value="down">▼ Düştü</option>
+      <option value="flat">— Değişmedi</option>
+    </select>
+    <span class="row-count" id="rowCount"></span>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ASIN</th><th>Ürün</th><th>Pazar</th>
+          <th>Şu An</th><th>Önceki</th><th>Değişim</th>
+          <th>Trend</th><th>7g Min/Max</th><th>Grafik</th>
+          <th>Güncelleme</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="compare-section">
+    <div class="compare-box">
+      <h3>Çoklu Fiyat Karşılaştırması</h3>
+      <div style="position:relative;height:280px"><canvas id="compareChart"></canvas></div>
+      <div id="compareLegend" style="display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;font-size:12px;color:var(--muted)"></div>
+    </div>
+  </div>
+
+  <div class="sheets-box" id="sheetsInfo">
+    <h3>Google Sheets Senkronizasyonu</h3>
+    <p>Her fiyat kontrolünden sonra veriler otomatik olarak Google Sheets'e yazılır.</p>
+    <p>Aktifleştirmek için Railway'de şu iki variable'ı ekle:</p>
+    <p><code>GOOGLE_SHEET_ID</code> — Sheet URL'sindeki ID (docs.google.com/spreadsheets/d/<b>BU_KISIM</b>/edit)</p>
+    <p><code>GOOGLE_SERVICE_JSON</code> — Google Cloud Service Account JSON içeriği (tek satır)</p>
+    <p style="margin-top:8px;font-size:11px;color:var(--hint)">Service Account için: Google Cloud Console → IAM → Service Accounts → JSON key indir → Sheet'i bu hesapla paylaş (Editor)</p>
+    <div id="sheetsStatus" style="margin-top:10px;font-size:12px;color:var(--muted)"></div>
+  </div>
+</main>
+
+<!-- Chart Modal -->
+<div class="modal-bg" id="chartModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="chartTitle">Fiyat Geçmişi</h2>
+      <button class="modal-close" onclick="closeChart()">✕</button>
+    </div>
+    <div style="position:relative;height:260px"><canvas id="hChart"></canvas></div>
+    <p style="font-size:11px;color:var(--muted);text-align:center;margin-top:10px" id="chartSub"></p>
+  </div>
+</div>
+
+<!-- Compare Modal -->
+<div class="modal-bg" id="compareModal">
+  <div class="modal" style="width:min(800px,95vw)">
+    <div class="modal-head">
+      <h2>Rakip Fiyat Karşılaştırması</h2>
+      <button class="modal-close" onclick="closeCompare()">✕</button>
+    </div>
+    <div style="position:relative;height:320px"><canvas id="bigCompareChart"></canvas></div>
+    <div id="bigCompareLegend" style="display:flex;flex-wrap:wrap;gap:12px;margin-top:12px;font-size:12px"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let data = [];
+let statusInfo = {};
+let currentTab = 'all';
+let addMode = 'competitor';
+let hChartInst = null;
+let compareChartInst = null;
+let bigCompareChartInst = null;
+let cdInterval = null;
+let nextCheck = null;
+
+const COLORS = ['#3b82f6','#22c55e','#ef4444','#f59e0b','#a855f7','#06b6d4','#f97316','#84cc16','#ec4899','#14b8a6'];
+const MINE_COLOR = '#f59e0b';
+
+async function api(path, opts={}) {
+  const r = await fetch(path, {headers:{'Content-Type':'application/json'},...opts});
+  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.detail || r.status); }
+  return r.json();
+}
+
+async function load() {
+  try {
+    [data, statusInfo] = await Promise.all([api('/api/asins'), api('/api/status')]);
+    updateBadge();
+    render();
+    updateStats();
+    updateTicker();
+    updateCompareChart();
+    scheduleCountdown();
+  } catch(e) { toast('Bağlantı hatası: '+e.message, true); }
+}
+
+function updateBadge() {
+  const b = document.getElementById('apiBadge');
+  if (statusInfo.keepa_configured) { b.textContent='● Keepa API'; b.className='badge live'; }
+  else { b.textContent='● Demo'; b.className='badge demo'; }
+  const sb = document.getElementById('sheetsBadge');
+  sb.style.display = statusInfo.sheets_configured ? 'inline-flex' : 'none';
+  const si = document.getElementById('sheetsStatus');
+  if (statusInfo.sheets_configured) si.textContent = '✓ Sheets bağlı, her kontrolde güncellenir';
+  else si.textContent = 'Henüz yapılandırılmadı.';
+}
+
+function scheduleCountdown() {
+  if (cdInterval) clearInterval(cdInterval);
+  if (!statusInfo.last_check || !statusInfo.interval_minutes) return;
+  const last = new Date(statusInfo.last_check);
+  nextCheck = new Date(last.getTime() + statusInfo.interval_minutes * 60000);
+  cdInterval = setInterval(() => {
+    const left = Math.max(0, nextCheck - Date.now());
+    const m = Math.floor(left/60000), s = Math.floor((left%60000)/1000);
+    document.getElementById('cdLabel').textContent = left > 0 ? `Sonraki: ${m}d ${String(s).padStart(2,'0')}s` : 'Kontrol ediliyor...';
+  }, 1000);
+}
+
+function setAddMode(mode) {
+  addMode = mode;
+  document.getElementById('tabCompetitor').className = 'add-tab' + (mode==='competitor' ? ' active competitor' : '');
+  document.getElementById('tabMine').className = 'add-tab' + (mode==='mine' ? ' active mine' : '');
+  document.getElementById('addBtn').style.background = mode==='mine' ? 'var(--gold)' : '';
+  document.getElementById('addBtn').style.borderColor = mode==='mine' ? 'var(--gold)' : '';
+  document.getElementById('nameIn').placeholder = mode==='mine' ? 'Ürün adın' : 'Ürün adı (isteğe bağlı)';
+}
+
+function switchTab(tab, el) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  render();
+}
+
+function extractASIN(v) {
+  v = v.trim().toUpperCase();
+  const m = v.match(/\/([A-Z0-9]{10})(?:[/?]|$)/);
+  if (m) return m[1];
+  if (/^[A-Z0-9]{10}$/.test(v)) return v;
+  return null;
+}
+
+async function addASIN() {
+  const asin = extractASIN(document.getElementById('asinIn').value) ||
+               extractASIN(document.getElementById('urlIn').value);
+  if (!asin) { toast('Geçerli ASIN veya URL gir', true); return; }
+  const name = document.getElementById('nameIn').value.trim();
+  const market = document.getElementById('mktIn').value;
+  const is_mine = addMode === 'mine';
+  try {
+    const res = await api('/api/asins', {method:'POST', body:JSON.stringify({asin, name, market, is_mine})});
+    toast(`${asin} eklendi${res.price ? ' → ' + res.price : ''}`);
+    document.getElementById('asinIn').value = '';
+    document.getElementById('nameIn').value = '';
+    document.getElementById('urlIn').value = '';
+    await load();
+  } catch(e) { toast(e.message, true); }
+}
+
+async function deleteASIN(asin) {
+  if (!confirm(`${asin} silinsin mi?`)) return;
+  await api(`/api/asins/${asin}`, {method:'DELETE'});
+  await load();
+}
+
+async function checkNow() {
+  const btn = document.getElementById('checkBtn');
+  btn.disabled = true; btn.textContent = '⟳ Kontrol...';
+  try {
+    await api('/api/check-now', {method:'POST'});
+    toast('Kontrol tamamlandı');
+    await load();
+  } catch(e) { toast(e.message, true); }
+  btn.disabled = false; btn.textContent = '▶ Kontrol Et';
+}
+
+function exportCSV() { window.open('/api/export-csv'); }
+
+function dir(a) {
+  if (a.price===null || a.prev===null) return 'flat';
+  return a.price > a.prev ? 'up' : a.price < a.prev ? 'down' : 'flat';
+}
+
+function chgBadge(a) {
+  const d = dir(a);
+  if (d==='flat' || a.price===null) return `<span class="chg flat">— değişmedi</span>`;
+  const diff = Math.abs(a.price-a.prev).toFixed(2);
+  const pct = Math.abs((a.price-a.prev)/a.prev*100).toFixed(1);
+  const sym = a.symbol||'$';
+  return d==='up'
+    ? `<span class="chg up">▲ ${sym}${diff} (+${pct}%)</span>`
+    : `<span class="chg down">▼ ${sym}${diff} (−${pct}%)</span>`;
+}
+
+function trendBadge(score) {
+  const abs = Math.abs(score);
+  const color = score > 5 ? 'var(--red)' : score < -5 ? 'var(--green)' : 'var(--muted)';
+  const label = score > 10 ? '▲▲ Yükseliyor' : score > 3 ? '▲ Artış' : score < -10 ? '▼▼ Düşüyor' : score < -3 ? '▼ Düşüş' : '→ Stabil';
+  const fillW = Math.min(100, abs);
+  return `<span class="trend" style="color:${color}">
+    <span class="trend-bar"><span class="trend-fill" style="width:${fillW}%;background:${color}"></span></span>
+    ${label}
+  </span>`;
+}
+
+function sparkSVG(history, d) {
+  const w=64,h=26,p=3;
+  if (!history||history.length<2) return `<svg width="${w}" height="${h}"></svg>`;
+  const min=Math.min(...history),max=Math.max(...history),range=max-min||1;
+  const pts = history.map((v,i)=>{
+    const x=p+(i/(history.length-1))*(w-p*2);
+    const y=h-p-((v-min)/range)*(h-p*2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  const col = d==='up'?'#ef4444':d==='down'?'#22c55e':'#4a4e63';
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+}
+
+function getFilteredData() {
+  const search = document.getElementById('fSearch').value.toLowerCase();
+  const fDir = document.getElementById('fDir').value;
+  return data.filter(a => {
+    if (currentTab==='mine' && !a.is_mine) return false;
+    if (currentTab==='competitors' && a.is_mine) return false;
+    if (fDir!=='all' && dir(a)!==fDir) return false;
+    if (search && !a.asin.toLowerCase().includes(search) && !a.name.toLowerCase().includes(search)) return false;
+    return true;
+  });
+}
+
+function render() {
+  const rows = getFilteredData();
+  document.getElementById('rowCount').textContent = rows.length + ' ürün';
+  const tbody = document.getElementById('tbody');
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="11"><div class="empty-state"><div style="font-size:32px">📭</div><p>ASIN bulunamadı. Yukarıdan ekle.</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(a => {
+    const d = dir(a);
+    const sym = a.symbol||'$';
+    const min7 = a.history.length ? Math.min(...a.history).toFixed(2) : '—';
+    const max7 = a.history.length ? Math.max(...a.history).toFixed(2) : '—';
+    const upd = a.updated ? new Date(a.updated).toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'}) : '—';
+    const mineLabel = a.is_mine ? '<span class="mine-label">BEN</span>' : '';
+    return `<tr id="row-${a.asin}" class="${a.is_mine?'mine-row':''}">
+      <td><a class="asin-link" href="https://${a.market}/dp/${a.asin}" target="_blank">${a.asin}</a></td>
+      <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis">${a.name}${mineLabel}</td>
+      <td style="font-size:11px;color:var(--muted)">${a.market.replace('amazon.','').toUpperCase()}</td>
+      <td class="price-now ${d}">${a.price!==null?sym+a.price.toFixed(2):'—'}</td>
+      <td class="price-prev">${a.prev!==null?sym+a.prev.toFixed(2):'—'}</td>
+      <td>${chgBadge(a)}</td>
+      <td>${trendBadge(a.trend||0)}</td>
+      <td style="font-size:11px;color:var(--muted)">${sym}${min7} / ${sym}${max7}</td>
+      <td class="sparkwrap" onclick="openChart('${a.asin}')" title="Geçmişi gör">${sparkSVG(a.history,d)}</td>
+      <td style="font-size:11px;color:var(--hint)">${upd}</td>
+      <td><button class="del-btn" onclick="deleteASIN('${a.asin}')">×</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function updateStats() {
+  const up = data.filter(a=>dir(a)==='up').length;
+  const down = data.filter(a=>dir(a)==='down').length;
+  const mine = data.filter(a=>a.is_mine).length;
+  document.getElementById('stTotal').textContent = data.length;
+  document.getElementById('stUp').textContent = up;
+  document.getElementById('stDown').textContent = down;
+  document.getElementById('stSame').textContent = data.length-up-down;
+  document.getElementById('stMine').textContent = mine;
+}
+
+function updateTicker() {
+  document.getElementById('ticker').innerHTML = data.map(a => {
+    const d = dir(a);
+    const sym = a.symbol||'$';
+    const arr = d==='up'?'▲':d==='down'?'▼':'—';
+    const mineDot = a.is_mine ? '<span class="mine-dot"></span>' : '';
+    return `<span class="ti">${mineDot}<span class="t-asin">${a.asin}</span><span class="t-price">${a.price!==null?sym+a.price.toFixed(2):'—'}</span><span class="${d}">${arr}</span></span>`;
+  }).join('');
+}
+
+function updateCompareChart() {
+  const ctx = document.getElementById('compareChart');
+  if (!ctx) return;
+  if (compareChartInst) { compareChartInst.destroy(); compareChartInst = null; }
+  const validData = data.filter(a => a.history && a.history.length > 1);
+  if (!validData.length) return;
+  const maxLen = Math.max(...validData.map(a=>a.history.length));
+  const labels = Array.from({length:maxLen},(_,i)=>i===maxLen-1?'Şu an':`-${maxLen-1-i}`);
+  const datasets = validData.map((a,i) => ({
+    label: a.asin + (a.is_mine?' (Ben)':''),
+    data: [...Array(maxLen-a.history.length).fill(null), ...a.history],
+    borderColor: a.is_mine ? MINE_COLOR : COLORS[i % COLORS.length],
+    backgroundColor: 'transparent',
+    borderWidth: a.is_mine ? 2.5 : 1.5,
+    borderDash: a.is_mine ? [] : [],
+    pointRadius: 2,
+    tension: 0.3,
+    spanGaps: true,
+  }));
+  compareChartInst = new Chart(ctx, {
+    type:'line',
+    data:{labels,datasets},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:'#7c8099',font:{size:10}},grid:{color:'rgba(255,255,255,0.04)'}},
+        y:{ticks:{color:'#7c8099',font:{size:10},callback:v=>v.toFixed(2)},grid:{color:'rgba(255,255,255,0.04)'}}
+      },
+      interaction:{mode:'index',intersect:false}
+    }
+  });
+  const legend = document.getElementById('compareLegend');
+  legend.innerHTML = datasets.map((ds,i)=>`
+    <span style="display:flex;align-items:center;gap:5px">
+      <span style="width:20px;height:2px;background:${ds.borderColor};display:inline-block;border-radius:1px"></span>
+      <span style="color:${ds.borderColor}">${ds.label}</span>
+    </span>`).join('');
+}
+
+async function openCompare() {
+  document.getElementById('compareModal').classList.add('open');
+  try {
+    const cdata = await api('/api/compare');
+    const ctx = document.getElementById('bigCompareChart');
+    if (bigCompareChartInst) { bigCompareChartInst.destroy(); bigCompareChartInst = null; }
+    const valid = cdata.filter(a=>a.data.length>0);
+    if (!valid.length) return;
+    const allTimes = [...new Set(valid.flatMap(a=>a.data.map(d=>d.time)))].sort();
+    const labels = allTimes.map(t=>new Date(t).toLocaleDateString('tr-TR',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}));
+    const datasets = valid.map((a,i)=>{
+      const priceMap = Object.fromEntries(a.data.map(d=>[d.time,d.price]));
+      return {
+        label: a.asin + (a.is_mine?' ★':''),
+        data: allTimes.map(t=>priceMap[t]||null),
+        borderColor: a.is_mine ? MINE_COLOR : COLORS[i%COLORS.length],
+        backgroundColor:'transparent',
+        borderWidth: a.is_mine?3:1.5,
+        pointRadius:3,tension:.3,spanGaps:true
+      };
+    });
+    bigCompareChartInst = new Chart(ctx,{
+      type:'line',data:{labels,datasets},
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:false}},
+        scales:{
+          x:{ticks:{color:'#7c8099',font:{size:10},maxTicksLimit:10},grid:{color:'rgba(255,255,255,0.04)'}},
+          y:{ticks:{color:'#7c8099',callback:v=>v.toFixed(2)},grid:{color:'rgba(255,255,255,0.04)'}}
+        },
+        interaction:{mode:'index',intersect:false}
+      }
+    });
+    document.getElementById('bigCompareLegend').innerHTML = datasets.map(ds=>`
+      <span style="display:flex;align-items:center;gap:5px;font-size:12px">
+        <span style="width:20px;height:2px;background:${ds.borderColor};display:inline-block;border-radius:1px"></span>
+        <span style="color:${ds.borderColor}">${ds.label}</span>
+      </span>`).join('');
+  } catch(e) { toast('Grafik yüklenemedi', true); }
+}
+
+function closeCompare() {
+  document.getElementById('compareModal').classList.remove('open');
+  if (bigCompareChartInst) { bigCompareChartInst.destroy(); bigCompareChartInst = null; }
+}
+
+async function openChart(asin) {
+  const a = data.find(x=>x.asin===asin);
+  if (!a) return;
+  document.getElementById('chartTitle').textContent = a.asin+' — '+a.name+(a.is_mine?' (Benim)':'');
+  document.getElementById('chartSub').textContent = a.market;
+  document.getElementById('chartModal').classList.add('open');
+  let hist=[];
+  try { hist = await api(`/api/history/${asin}`); } catch {}
+  const labels = hist.map(h=>new Date(h.time).toLocaleDateString('tr-TR',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}));
+  const prices = hist.map(h=>h.price);
+  const colors = prices.map((v,i)=>i===0?'#4a4e63':v>prices[i-1]?'#ef4444':v<prices[i-1]?'#22c55e':'#4a4e63');
+  if (hChartInst) { hChartInst.destroy(); hChartInst=null; }
+  hChartInst = new Chart(document.getElementById('hChart'),{
+    type:'bar',
+    data:{labels,datasets:[{data:prices,backgroundColor:colors,borderRadius:4,borderSkipped:false}]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>(a.symbol||'$')+c.parsed.y.toFixed(2)}}},
+      scales:{
+        x:{ticks:{color:'#7c8099',font:{size:10},maxRotation:45},grid:{display:false}},
+        y:{ticks:{color:'#7c8099',callback:v=>(a.symbol||'$')+v.toFixed(2)},grid:{color:'rgba(255,255,255,0.05)'}}
+      }
+    }
+  });
+}
+
+function closeChart() {
+  document.getElementById('chartModal').classList.remove('open');
+  if (hChartInst) { hChartInst.destroy(); hChartInst=null; }
+}
+
+function toast(msg, err=false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.color = err ? 'var(--red)' : 'var(--green)';
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 3000);
+}
+
+document.getElementById('chartModal').addEventListener('click', e=>{if(e.target===document.getElementById('chartModal'))closeChart()});
+document.getElementById('compareModal').addEventListener('click', e=>{if(e.target===document.getElementById('compareModal'))closeCompare()});
+
+load();
+setInterval(load, 60000);
+</script>
+</body>
+</html>
